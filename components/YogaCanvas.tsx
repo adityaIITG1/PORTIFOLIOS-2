@@ -63,6 +63,10 @@ export default function YogaCanvas() {
     const namasteHoldTimeRef = useRef(0); // Screenshot Trigger
     const lastScreenshotTimeRef = useRef(0);
 
+    // Third Eye & Particles
+    const thirdEyeRef = useRef({ dwellTime: 0, target: null as string | null });
+    const particlesRef = useRef<Array<{ x: number, y: number, vx: number, vy: number, life: number, type: string, color: string }>>([]);
+
     // UI State for Level & Stats
     const [xp, setXp] = useState(0);
     const [level, setLevel] = useState(3);
@@ -226,8 +230,6 @@ export default function YogaCanvas() {
                         // A simple workaround for this "parity" task: Just capture the UI or accept the video might be black if tainted.
                         // Better approach: Draw the current video frame from our canvasRef (which has the video drawn on it!)
                         // Our canvasRef has the video drawn on it in the animate loop!
-                        // Wait, canvasRef ONLY has the overlays (lines), video is a separate <video> tag.
-                        // But we draw the video onto canvasRef in step 1 of animate loop!
                         // "ctx.drawImage(video, 0, 0, width, height);"
                         // So canvasRef actually HAS the video frame!
                         // So we just need to make sure html2canvas captures canvasRef correctly.
@@ -272,6 +274,12 @@ export default function YogaCanvas() {
         brainImg.src = "/brain_glow.png";
         const sunImg = new Image();
         sunImg.src = "/sun_glow.png";
+        const pranaImg = new Image();
+        pranaImg.src = "/prana_glow.png";
+        const apanaImg = new Image();
+        apanaImg.src = "/apana_glow.png";
+        const varunImg = new Image();
+        varunImg.src = "/varun_glow.png";
 
         const animate = () => {
             if (
@@ -310,7 +318,6 @@ export default function YogaCanvas() {
             const handResults = handLandmarker.detectForVideo(video, now);
             const faceResults = faceLandmarker.detectForVideo(video, now);
 
-
             let currentGesture = null;
             let isEyesClosed = false;
 
@@ -323,7 +330,7 @@ export default function YogaCanvas() {
                     if (g) {
                         currentGesture = g;
 
-                        // [NEW] Draw Mudra Visuals (Brain/Sun)
+                        // [NEW] Draw Mudra Visuals (Brain/Sun/Prana/Apana/Varun)
                         // Calculate Palm Center (Approx between Wrist 0 and Middle MCP 9)
                         const wrist = landmarks[0];
                         const middleMcp = landmarks[9];
@@ -332,23 +339,56 @@ export default function YogaCanvas() {
                         const cy = (wrist.y + middleMcp.y) / 2 * height;
                         const size = 100; // Size of the icon
 
+                        ctx.save();
+                        ctx.globalAlpha = 0.9;
+
                         if (g === "Gyan Mudra" && brainImg.complete) {
-                            ctx.save();
-                            ctx.globalAlpha = 0.9;
                             ctx.drawImage(brainImg, cx - size / 2, cy - size / 2, size, size);
-                            // Glow
                             ctx.shadowColor = "cyan";
                             ctx.shadowBlur = 20;
-                            ctx.restore();
                         } else if (g === "Surya Mudra" && sunImg.complete) {
-                            ctx.save();
-                            ctx.globalAlpha = 0.9;
                             ctx.drawImage(sunImg, cx - size / 2, cy - size / 2, size, size);
-                            // Glow
                             ctx.shadowColor = "orange";
                             ctx.shadowBlur = 20;
-                            ctx.restore();
+                        } else if (g === "Prana Mudra" && pranaImg.complete) {
+                            ctx.drawImage(pranaImg, cx - size / 2, cy - size / 2, size, size);
+                            ctx.shadowColor = "#00ff00"; // Green
+                            ctx.shadowBlur = 20;
+
+                            // Spawn Nature Particles
+                            if (Math.random() < 0.2) {
+                                particlesRef.current.push({
+                                    x: cx, y: cy,
+                                    vx: (Math.random() - 0.5) * 2,
+                                    vy: -1 - Math.random(), // Float up
+                                    life: 1.0,
+                                    type: "nature",
+                                    color: "rgba(50, 205, 50, 0.8)"
+                                });
+                            }
+                        } else if (g === "Apana Mudra" && apanaImg.complete) {
+                            ctx.drawImage(apanaImg, cx - size / 2, cy - size / 2, size, size);
+                            ctx.shadowColor = "#8b0000"; // Dark Red
+                            ctx.shadowBlur = 20;
+                        } else if (g === "Varun Mudra" && varunImg.complete) {
+                            ctx.drawImage(varunImg, cx - size / 2, cy - size / 2, size, size);
+                            ctx.shadowColor = "#00bfff"; // Deep Sky Blue
+                            ctx.shadowBlur = 20;
+
+                            // Spawn Water Particles
+                            if (Math.random() < 0.3) {
+                                particlesRef.current.push({
+                                    x: cx, y: cy,
+                                    vx: (Math.random() - 0.5) * 2,
+                                    vy: 2 + Math.random() * 2, // Fall down
+                                    life: 1.0,
+                                    type: "water",
+                                    color: "rgba(0, 191, 255, 0.8)"
+                                });
+                            }
                         }
+
+                        ctx.restore();
                     }
                 }
 
@@ -370,11 +410,85 @@ export default function YogaCanvas() {
                 }
             }
 
+            // --- ELEMENTAL PARTICLES UPDATE & DRAW ---
+            if (particlesRef.current.length > 0) {
+                ctx.save();
+                particlesRef.current.forEach((p, i) => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.life -= 0.02;
+
+                    if (p.type === "nature") {
+                        // Leaf movement
+                        p.x += Math.sin(Date.now() / 200 + i) * 1;
+                    }
+
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.life;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.type === "water" ? 3 : 4, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+                // Remove dead particles
+                particlesRef.current = particlesRef.current.filter(p => p.life > 0);
+                ctx.restore();
+            }
+
             // Face Logic
             if (faceResults.faceLandmarks && faceResults.faceLandmarks.length > 0) {
                 const face = faceResults.faceLandmarks[0];
                 const analysis = analyzeFace(face);
                 isEyesClosed = analysis.isEyesClosed;
+
+                // --- THIRD EYE INTERFACE ---
+                const forehead = face[10];
+                const fx = forehead.x * width;
+                const fy = forehead.y * height;
+                const gazeX = analysis.gazeX || 0;
+
+                // Calculate Target
+                let targetX = width / 2 + gazeX * (width * 0.8);
+                let targetY = height * 0.6;
+                let targetLabel = null;
+
+                if (gazeX < -0.3) targetLabel = "Right"; // Screen Left
+                else if (gazeX > 0.3) targetLabel = "Left"; // Screen Right
+
+                thirdEyeRef.current.target = targetLabel;
+
+                // Draw Beam & Reticle
+                const beamColor = "rgba(255, 0, 255, 0.4)"; // Purple
+                const reticleColor = targetLabel ? "rgba(0, 255, 255, 0.8)" : "rgba(255, 255, 255, 0.3)";
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(fx, fy);
+                ctx.lineTo(targetX, targetY);
+                ctx.strokeStyle = beamColor;
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 15]); // Dashed beam
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Reticle
+                ctx.beginPath();
+                ctx.arc(targetX, targetY, 15, 0, 2 * Math.PI);
+                ctx.strokeStyle = reticleColor;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                if (targetLabel) {
+                    ctx.fillStyle = "cyan";
+                    ctx.font = "12px monospace";
+                    ctx.fillText(targetLabel === "Left" ? "FOCUS LEFT" : "FOCUS RIGHT", targetX - 40, targetY + 30);
+
+                    // Locked Indicator
+                    ctx.beginPath();
+                    ctx.arc(targetX, targetY, 5, 0, 2 * Math.PI);
+                    ctx.fillStyle = "white";
+                    ctx.fill();
+                }
+                ctx.restore();
             }
 
             // Meditation Logic (Stabilized)
@@ -598,33 +712,28 @@ export default function YogaCanvas() {
 
                 // Update Mood & Posture
                 if (isMeditationRef.current) {
-                    setMood("Peaceful");
+                    setMood("Deep Peace");
                     setPosture("Lotus");
-                } else if (gestureRef.current) {
+                } else if (currentGesture) {
                     setMood("Focused");
                     setPosture("Asana");
-                } else if (eyesClosedTimeRef.current > 0) {
-                    setMood("Calm");
-                    setPosture("Good");
                 } else if (faceResults.faceLandmarks.length > 0) {
-                    setMood("Relaxed");
+                    setMood("Calm");
                     setPosture("Good");
                 } else {
                     setMood("Distracted");
-                    setPosture("Adjust");
+                    setPosture("Poor");
                 }
-
-                // Update Level UI
-                setLevel(levelRef.current);
-                setXp(Math.floor(xpRef.current));
-                const progress = (xpRef.current % XP_PER_LEVEL) / XP_PER_LEVEL * 100;
-                setLevelProgress(progress);
-                setWarningMsg(warningMsgRef.current);
             }
 
-            // 4. Draw Visuals
+            // 4. Render UI Overlays
+            // Level Progress Bar
+            const progress = (xpRef.current % XP_PER_LEVEL) / XP_PER_LEVEL * 100;
+            setLevelProgress(progress);
+            setLevel(levelRef.current);
+            setWarningMsg(warning);
 
-            // BACKGROUND SUN AURA (Instead of revolving stars on head)
+            // Aura
             if (auraIntensityRef.current > 0.01) {
                 ctx.save();
                 const cx = width / 2;
@@ -720,7 +829,12 @@ export default function YogaCanvas() {
         };
 
         requestRef.current = requestAnimationFrame(animate);
-        return () => cancelAnimationFrame(requestRef.current);
+
+        return () => {
+            if (requestRef.current) {
+                cancelAnimationFrame(requestRef.current);
+            }
+        };
     }, [handLandmarker, faceLandmarker]);
 
     return (
@@ -763,7 +877,6 @@ export default function YogaCanvas() {
                 alignmentMode={alignmentMode}
             />
 
-            {/* Level Progress Bar (Top Right Center) */}
             {/* Level Progress Bar (Top Right Center) */}
             <div className="absolute top-24 right-80 w-80 z-20 pointer-events-none flex flex-col items-end">
                 <div className="flex justify-between items-end mb-1 w-full">
@@ -863,10 +976,10 @@ export default function YogaCanvas() {
                     <button
                         onClick={toggleAudio}
                         className="
-                            group relative px-10 py-5 bg-transparent overflow-hidden rounded-full
-                            border border-green-500/50 text-white shadow-[0_0_40px_rgba(34,197,94,0.2)]
-                            transition-all duration-500 hover:shadow-[0_0_60px_rgba(34,197,94,0.4)] hover:border-green-400
-                        "
+                                group relative px-10 py-5 bg-transparent overflow-hidden rounded-full
+                                border border-green-500/50 text-white shadow-[0_0_40px_rgba(34,197,94,0.2)]
+                                transition-all duration-500 hover:shadow-[0_0_60px_rgba(34,197,94,0.4)] hover:border-green-400
+                            "
                     >
                         <div className="absolute inset-0 w-full h-full bg-green-600/20 group-hover:bg-green-600/30 transition-all duration-500"></div>
                         <span className="relative text-2xl font-light tracking-widest flex items-center gap-4">
@@ -894,12 +1007,12 @@ export default function YogaCanvas() {
                 <button
                     onClick={toggleListening}
                     className={`
-                        w-16 h-16 rounded-full flex items-center justify-center backdrop-blur-md border-2 transition-all duration-500 shadow-[0_0_30px_rgba(0,0,0,0.5)]
-                        ${isListening
+                            w-16 h-16 rounded-full flex items-center justify-center backdrop-blur-md border-2 transition-all duration-500 shadow-[0_0_30px_rgba(0,0,0,0.5)]
+                            ${isListening
                             ? "bg-green-500/20 border-green-400 text-green-400 animate-pulse shadow-[0_0_30px_rgba(74,222,128,0.4)]"
                             : "bg-white/10 border-white/20 text-white/60 hover:bg-white/20 hover:scale-105"
                         }
-                    `}
+                        `}
                 >
                     {isListening ? (
                         <div className="flex gap-1 items-center">

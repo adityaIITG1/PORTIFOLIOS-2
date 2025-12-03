@@ -35,9 +35,29 @@ export function analyzeFace(landmarks: NormalizedLandmark[]) {
     const avgEAR = (leftEAR + rightEAR) / 2.0;
 
     // Threshold for closed eyes (tuned for webcam distance)
-    const EAR_THRESHOLD = 0.30; // Increased from 0.25 to catch "looking down" or "half-closed"
+    const EAR_THRESHOLD = 0.30;
 
     const isEyesClosed = avgEAR < EAR_THRESHOLD;
 
-    return { avgEAR, isEyesClosed };
+    // --- Gaze Tracking Logic (Ported from main2.py) ---
+    let gazeX = 0.0;
+    // Check if iris landmarks exist (Standard Face Mesh has 478 landmarks, 468-477 are iris)
+    if (landmarks.length > 470) {
+        // Right Eye (User's Right, Screen Left)
+        // Inner: 362, Outer: 263
+        const r_inner = landmarks[362];
+        const r_outer = landmarks[263];
+        const r_iris = landmarks[473]; // Right Iris Center
+
+        const h_dist = dist(r_inner, r_outer);
+
+        if (h_dist > 0) {
+            const eye_center_x = (r_inner.x + r_outer.x) / 2;
+            // Normalize: deviation / (half_width)
+            // Factor 4.0 to make it more sensitive (from main2.py)
+            gazeX = (r_iris.x - eye_center_x) / (h_dist / 2) * 4.0;
+        }
+    }
+
+    return { avgEAR, isEyesClosed, gazeX };
 }
